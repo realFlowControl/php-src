@@ -266,9 +266,10 @@ ZEND_API zend_mm_heap *zend_mm_get_heap(void);
 
 ZEND_API size_t zend_mm_gc(zend_mm_heap *heap);
 
-#define ZEND_MM_CUSTOM_HEAP_NONE  0
-#define ZEND_MM_CUSTOM_HEAP_STD   1
-#define ZEND_MM_CUSTOM_HEAP_DEBUG 2
+#define ZEND_MM_CUSTOM_HEAP_NONE     0
+#define ZEND_MM_CUSTOM_HEAP_STD      1
+#define ZEND_MM_CUSTOM_HEAP_DEBUG    2
+#define ZEND_MM_CUSTOM_HEAP_OBSERVED 4
 
 ZEND_API bool zend_mm_is_custom_heap(zend_mm_heap *new_heap);
 ZEND_API void zend_mm_set_custom_handlers(zend_mm_heap *heap,
@@ -279,6 +280,23 @@ ZEND_API void zend_mm_get_custom_handlers(zend_mm_heap *heap,
                                           void* (**_malloc)(size_t),
                                           void  (**_free)(void*),
                                           void* (**_realloc)(void*, size_t));
+
+typedef struct _zend_mm_observer zend_mm_observer;
+
+// global
+ZEND_API zend_mm_observer* zend_mm_observer_register(
+	void (*malloc)(size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
+	void (*free)(void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
+	void (*realloc)(void *, size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
+);
+void zend_mm_observers_startup(zend_mm_heap *heap);
+void zend_mm_observers_shutdown(zend_mm_heap *heap);
+void zend_mm_observers_unregister(void);
+
+// thread local
+ZEND_API bool zend_mm_observer_enabled(zend_mm_heap*, zend_mm_observer*);
+ZEND_API bool zend_mm_observer_enable(zend_mm_heap*, zend_mm_observer*);
+ZEND_API bool zend_mm_observer_disable(zend_mm_heap*, zend_mm_observer*);
 
 #if ZEND_DEBUG
 ZEND_API void zend_mm_set_custom_debug_handlers(zend_mm_heap *heap,
