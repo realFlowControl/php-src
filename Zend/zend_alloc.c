@@ -51,6 +51,7 @@
  * with more specialized routines when the requested size is known.
  */
 
+#include "php.h"
 #include "zend.h"
 #include "zend_alloc.h"
 #include "zend_globals.h"
@@ -3252,7 +3253,7 @@ void zend_mm_observer_sync_flag(bool enabled_observer) {
 #endif
 }
 
-bool zend_mm_observer_enabled(zend_mm_heap *heap, zend_mm_observer *node) {
+ZEND_API bool zend_mm_observer_enabled(zend_mm_heap *heap, zend_mm_observer *node) {
 #if ZEND_MM_CUSTOM
 	if (heap == NULL) {
 		heap = AG(mm_heap);
@@ -3271,7 +3272,7 @@ bool zend_mm_observer_enabled(zend_mm_heap *heap, zend_mm_observer *node) {
 	return false;
 }
 
-bool zend_mm_observer_enable(zend_mm_heap *heap, zend_mm_observer *node) {
+ZEND_API bool zend_mm_observer_enable(zend_mm_heap *heap, zend_mm_observer *node) {
 #if ZEND_MM_CUSTOM
 	if (heap == NULL) {
 		heap = AG(mm_heap);
@@ -3292,7 +3293,7 @@ bool zend_mm_observer_enable(zend_mm_heap *heap, zend_mm_observer *node) {
 	return false;
 }
 
-bool zend_mm_observer_disable(zend_mm_heap *heap, zend_mm_observer *node) {
+ZEND_API bool zend_mm_observer_disable(zend_mm_heap *heap, zend_mm_observer *node) {
 #if ZEND_MM_CUSTOM
 	if (heap == NULL) {
 		heap = AG(mm_heap);
