@@ -51,7 +51,6 @@
  * with more specialized routines when the requested size is known.
  */
 
-#include "php.h"
 #include "zend.h"
 #include "zend_alloc.h"
 #include "zend_globals.h"
@@ -3126,7 +3125,6 @@ ZEND_API zend_mm_observer* zend_mm_observer_register(
 	void (*free)(void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
 	void (*realloc)(void *, size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
 ) {
-	ZEND_ASSERT(php_during_module_startup());
 #if ZEND_MM_CUSTOM
 	zend_mm_observer *node = pemalloc(sizeof(zend_mm_observer), 1);
 	node->malloc = malloc;
