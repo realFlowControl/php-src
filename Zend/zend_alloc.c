@@ -3253,63 +3253,57 @@ void zend_mm_observer_sync_flag(bool enabled_observer) {
 #endif
 }
 
-ZEND_API bool zend_mm_observer_enabled(zend_mm_heap *heap, zend_mm_observer *node) {
-#if ZEND_MM_CUSTOM
+zend_mm_heap_observer* zend_mm_observer_find_heap_observer(zend_mm_heap *heap, zend_mm_observer *node) {
 	if (heap == NULL) {
 		heap = AG(mm_heap);
 		if (heap == NULL) {
-			return false;
+			return NULL;
 		}
 	}
 	zend_mm_heap_observer *current = heap->observers;
 	while (current != NULL) {
 		if (current->observer == node) {
-			return current->enabled;
+			return current;
 		}
 		current = current->next;
 	}
+	return NULL;
+}
+
+ZEND_API bool zend_mm_observer_enabled(zend_mm_heap *heap, zend_mm_observer *node) {
+#if ZEND_MM_CUSTOM
+	zend_mm_heap_observer *heap_observer = zend_mm_observer_find_heap_observer(heap, node);
+	if (heap_observer == NULL) {
+		return false;
+	}
+	return heap_observer->enabled;
+#endif
+	return false;
+}
+
+ZEND_API bool zend_mm_observer_set_state(zend_mm_heap *heap, zend_mm_observer *node, bool state) {
+#if ZEND_MM_CUSTOM
+	zend_mm_heap_observer *heap_observer = zend_mm_observer_find_heap_observer(heap, node);
+	if (heap_observer == NULL) {
+		false;
+	}
+	heap_observer->enabled = state;
+	zend_mm_observer_sync_flag(state);
+	return true;
 #endif
 	return false;
 }
 
 ZEND_API bool zend_mm_observer_enable(zend_mm_heap *heap, zend_mm_observer *node) {
 #if ZEND_MM_CUSTOM
-	if (heap == NULL) {
-		heap = AG(mm_heap);
-		if (heap == NULL) {
-			return false;
-		}
-	}
-	zend_mm_heap_observer *current = heap->observers;
-	while (current != NULL) {
-		if (current->observer == node) {
-			current->enabled = true;
-			zend_mm_observer_sync_flag(true);
-			return true;
-		}
-		current = current->next;
-	}
+	return zend_mm_observer_set_state(heap, node, true);
 #endif
 	return false;
 }
 
 ZEND_API bool zend_mm_observer_disable(zend_mm_heap *heap, zend_mm_observer *node) {
 #if ZEND_MM_CUSTOM
-	if (heap == NULL) {
-		heap = AG(mm_heap);
-		if (heap == NULL) {
-			return false;
-		}
-	}
-	zend_mm_heap_observer *current = heap->observers;
-	while (current != NULL) {
-		if (current->observer == node) {
-			current->enabled = false;
-			zend_mm_observer_sync_flag(false);
-			return true;
-		}
-		current = current->next;
-	}
+	return zend_mm_observer_set_state(heap, node, false);
 #endif
 	return false;
 }

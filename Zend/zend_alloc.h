@@ -295,6 +295,7 @@ void zend_mm_observers_unregister(void);
 
 // thread local
 ZEND_API bool zend_mm_observer_enabled(zend_mm_heap*, zend_mm_observer*);
+ZEND_API bool zend_mm_observer_set_state(zend_mm_heap *heap, zend_mm_observer *node, bool state);
 ZEND_API bool zend_mm_observer_enable(zend_mm_heap*, zend_mm_observer*);
 ZEND_API bool zend_mm_observer_disable(zend_mm_heap*, zend_mm_observer*);
 
