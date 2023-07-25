@@ -283,21 +283,16 @@ ZEND_API void zend_mm_get_custom_handlers(zend_mm_heap *heap,
 
 typedef struct _zend_mm_observer zend_mm_observer;
 
-// global
+// thread local
+ZEND_API bool zend_mm_is_observed(zend_mm_heap *heap);
 ZEND_API zend_mm_observer* zend_mm_observer_register(
+	zend_mm_heap *heap,
 	void (*malloc)(size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
 	void (*free)(void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
 	void (*realloc)(void *, size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
 );
-void zend_mm_observers_startup(zend_mm_heap *heap);
+ZEND_API bool zend_mm_observer_unregister(zend_mm_heap *heap, zend_mm_observer *observer);
 void zend_mm_observers_shutdown(zend_mm_heap *heap);
-void zend_mm_observers_unregister(void);
-
-// thread local
-ZEND_API bool zend_mm_observer_enabled(zend_mm_heap*, zend_mm_observer*);
-ZEND_API bool zend_mm_observer_set_state(zend_mm_heap *heap, zend_mm_observer *node, bool state);
-ZEND_API bool zend_mm_observer_enable(zend_mm_heap*, zend_mm_observer*);
-ZEND_API bool zend_mm_observer_disable(zend_mm_heap*, zend_mm_observer*);
 
 #if ZEND_DEBUG
 ZEND_API void zend_mm_set_custom_debug_handlers(zend_mm_heap *heap,

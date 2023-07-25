@@ -51,7 +51,6 @@
  * with more specialized routines when the requested size is known.
  */
 
-#include "php.h"
 #include "zend.h"
 #include "zend_alloc.h"
 #include "zend_globals.h"
@@ -203,6 +202,13 @@ typedef struct  _zend_mm_huge_list zend_mm_huge_list;
 
 static bool zend_mm_use_huge_pages = false;
 
+struct _zend_mm_observer {
+	void (*malloc)(size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+	void (*free)(void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+	void (*realloc)(void *, size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+	zend_mm_observer *next;
+};
+
 /*
  * Memory is retrieved from OS by chunks of fixed size 2MB.
  * Inside chunk it's managed by pages of fixed size 4096B.
@@ -234,23 +240,6 @@ static bool zend_mm_use_huge_pages = false;
  *              (5 bits) bin number (e.g. 0 for sizes 0-2, 1 for 3-4,
  *               2 for 5-8, 3 for 9-16 etc) see zend_alloc_sizes.h
  */
-
-
-struct _zend_mm_observer {
-	void (*malloc)(size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
-	void (*free)(void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
-	void (*realloc)(void *, size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
-	zend_mm_observer *next;
-};
-zend_mm_observer *zend_mm_observers = NULL;
-
-typedef struct _zend_mm_heap_observer zend_mm_heap_observer;
-struct _zend_mm_heap_observer {
-	zend_mm_observer *observer;
-	bool enabled;
-	zend_mm_heap_observer *next;
-};
-
 struct _zend_mm_heap {
 #if ZEND_MM_CUSTOM
 	int                use_custom_heap;         /* bitflag */
@@ -298,7 +287,7 @@ struct _zend_mm_heap {
 		} debug;
 	} custom_heap;
 	HashTable *tracked_allocs;
-	zend_mm_heap_observer *observers;
+	zend_mm_observer *observers;
 #endif
 };
 
@@ -1966,7 +1955,6 @@ static zend_mm_heap *zend_mm_init(void)
 #if ZEND_MM_CUSTOM
 	heap->use_custom_heap = ZEND_MM_CUSTOM_HEAP_NONE;
 	heap->observers = NULL;
-	zend_mm_observers_startup(heap);
 #endif
 #if ZEND_MM_STORAGE
 	heap->storage = NULL;
@@ -2528,10 +2516,10 @@ static ZEND_COLD void* ZEND_FASTCALL _malloc_custom(size_t size ZEND_FILE_LINE_D
 		ptr = zend_mm_alloc_heap(AG(mm_heap), size ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
 	}
 	if (use_custom_heap & ZEND_MM_CUSTOM_HEAP_OBSERVED) {
-		zend_mm_heap_observer *current = heap->observers;
+		zend_mm_observer *current = heap->observers;
 		while (current != NULL) {
-			if (current->enabled && current->observer != NULL && current->observer->malloc != NULL) {
-				current->observer->malloc(size, ptr ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
+			if (current->malloc != NULL) {
+				current->malloc(size, ptr ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
 			}
 			current = current->next;
 		}
@@ -2545,10 +2533,10 @@ static ZEND_COLD void ZEND_FASTCALL _efree_custom(void *ptr ZEND_FILE_LINE_DC ZE
 	int use_custom_heap = heap->use_custom_heap;
 
 	if (use_custom_heap & ZEND_MM_CUSTOM_HEAP_OBSERVED) {
-		zend_mm_heap_observer *current = heap->observers;
+		zend_mm_observer *current = heap->observers;
 		while (current != NULL) {
-			if (current->enabled && current->observer != NULL && current->observer->free != NULL) {
-				current->observer->free(ptr ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
+			if (current->free != NULL) {
+				current->free(ptr ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
 			}
 			current = current->next;
 		}
@@ -2578,10 +2566,10 @@ static ZEND_COLD void* ZEND_FASTCALL _realloc_custom(void *ptr, size_t size ZEND
 		new_ptr = zend_mm_realloc_heap(AG(mm_heap), ptr, size, 0, size ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
 	}
 	if (use_custom_heap & ZEND_MM_CUSTOM_HEAP_OBSERVED) {
-		zend_mm_heap_observer *current = heap->observers;
+		zend_mm_observer *current = heap->observers;
 		while (current != NULL) {
-			if (current->enabled && current->observer != NULL && current->observer->realloc != NULL) {
-				current->observer->realloc(ptr, size, new_ptr ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
+			if (current->realloc != NULL) {
+				current->realloc(ptr, size, new_ptr ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
 			}
 			current = current->next;
 		}
@@ -3000,7 +2988,6 @@ static void alloc_globals_ctor(zend_alloc_globals *alloc_globals)
 			mm_heap->tracked_allocs = malloc(sizeof(HashTable));
 			zend_hash_init(mm_heap->tracked_allocs, 1024, NULL, NULL, 1);
 		}
-		zend_mm_observers_startup(mm_heap);
 		return;
 	}
 #endif
@@ -3059,10 +3046,13 @@ ZEND_API bool zend_mm_is_custom_heap(zend_mm_heap *new_heap)
 #endif
 }
 
-ZEND_API bool zend_mm_is_observed(zend_mm_heap *new_heap)
+ZEND_API bool zend_mm_is_observed(zend_mm_heap *heap)
 {
 #if ZEND_MM_CUSTOM
-	return (AG(mm_heap)->use_custom_heap & ZEND_MM_CUSTOM_HEAP_OBSERVED) != 0;
+	if (!heap && !(heap = AG(mm_heap))) {
+		return false;
+	}
+	return (heap->use_custom_heap & ZEND_MM_CUSTOM_HEAP_OBSERVED) != 0;
 #else
 	return false;
 #endif
@@ -3115,32 +3105,40 @@ ZEND_API void zend_mm_get_custom_handlers(zend_mm_heap *heap,
 }
 
 /*
- * Use this function to register observers to the ZendMM. Make sure to call this
- * function only during PHP module startup phase and not later. Observers will
- * not be called directly after registering them, but only after
- * `zend_mm_observers_startup()` was run, which will take place after the PHP
- * module startup phase.
+ * Use this function to register observers to the ZendMM.
+ * This function operates on the thread local heap and is meant to be called in
+ * RINIT. Calling it in MINIT works only in NTS builds, but not in ZTS.
  */
 ZEND_API zend_mm_observer* zend_mm_observer_register(
+	zend_mm_heap* heap,
 	void (*malloc)(size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
 	void (*free)(void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
 	void (*realloc)(void *, size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
 ) {
 #if ZEND_MM_CUSTOM
+	if (!heap && !(heap = AG(mm_heap))) {
+		return false;
+	}
+
 	zend_mm_observer *node = pemalloc(sizeof(zend_mm_observer), 1);
 	node->malloc = malloc;
 	node->free = free;
 	node->realloc = realloc;
 	node->next = NULL;
-	if (zend_mm_observers == NULL) {
-		zend_mm_observers = node;
-		return zend_mm_observers;
+
+	// set bitflag for observers being around
+	heap->use_custom_heap |= ZEND_MM_CUSTOM_HEAP_OBSERVED;
+
+	if (heap->observers == NULL) {
+		heap->observers = node;
+		return node;
 	}
-	zend_mm_observer *current = zend_mm_observers;
+	zend_mm_observer *current = heap->observers;
 	while (current->next != NULL) {
 		current = current->next;
 	}
 	current->next = node;
+
 	return node;
 #else
 	return NULL;
@@ -3148,164 +3146,68 @@ ZEND_API zend_mm_observer* zend_mm_observer_register(
 }
 
 /*
- * This function will activate the global registered observers for the current
- * heap. After this has been run, observering functions will be called.
+ * Use this function to unregister your observer at any given time. In case your
+ * observer was the last one to be unregistered, this will also reset the
+ * `heap->use_custom_heap` bitflag.
  */
-void zend_mm_observers_startup(zend_mm_heap *heap)
+ZEND_API bool zend_mm_observer_unregister(zend_mm_heap *heap, zend_mm_observer *observer)
 {
 #if ZEND_MM_CUSTOM
-	if (heap == NULL) {
-		heap = AG(mm_heap);
+	if (!heap && !(heap = AG(mm_heap))) {
+		return false;
 	}
-	zend_mm_observer *current_observer = zend_mm_observers;
-	if (current_observer == NULL) {
-		// no observers installed
-		return;
-	}
-	// copy observers into heap
-	zend_mm_heap_observer *node = NULL;
-	zend_mm_heap_observer *current_heap_observer = NULL;
-	while (current_observer != NULL) {
-		node = pemalloc(sizeof(zend_mm_heap_observer), 1);
-		node->observer = current_observer;
-		node->enabled = true;
-		node->next = NULL;
-		if (current_heap_observer == NULL) {
-			heap->observers = node;
-		} else {
-			current_heap_observer->next = node;
+
+	zend_mm_observer *current = heap->observers, *prev = NULL;
+
+	if (current == observer) {
+		heap->observers = observer->next;
+		pefree(observer, 1);
+		if (!heap->observers)
+		{
+			// this was the one and only installed observer
+			heap->use_custom_heap &= ~ZEND_MM_CUSTOM_HEAP_OBSERVED;
 		}
-		current_heap_observer = node;
-		current_observer = current_observer->next;
+		return true;
 	}
-	// set bitflag for observers being around
-	heap->use_custom_heap |= ZEND_MM_CUSTOM_HEAP_OBSERVED;
+
+	while (current != NULL && current != observer) {
+		prev = current;
+		current = current->next;
+	}
+
+	// did not find observer or NULL was given
+	if (current == NULL)
+		return false;
+
+	prev->next = current->next;
+	pefree(observer, 1);
+	return true;
+#else
+	return false;
 #endif
 }
 
 /*
  * This function will shutdown the observers for the current heap and free
- * global structures. This will be called before PHP module shutdown phase.
+ * memory
  */
 void zend_mm_observers_shutdown(zend_mm_heap *heap)
 {
 #if ZEND_MM_CUSTOM
-	if (heap == NULL) {
-		heap = AG(mm_heap);
-		if (heap == NULL) {
-			return;
-		}
+	if (!heap && !(heap = AG(mm_heap))) {
+		return;
 	}
-	zend_mm_heap_observer *current_heap_observer = heap->observers;
-	zend_mm_heap_observer *next_heap_observer = NULL;
-	while (current_heap_observer != NULL) {
-		next_heap_observer = current_heap_observer->next;
-		pefree(current_heap_observer, 1);
-		current_heap_observer = next_heap_observer;
-	}
-	heap->observers = NULL;
-	return;
-#endif
-}
-
-void zend_mm_observers_unregister(void)
-{
-#if ZEND_MM_CUSTOM
-	zend_mm_observer *current = zend_mm_observers;
+	zend_mm_observer *current = heap->observers;
 	zend_mm_observer *next = NULL;
 	while (current != NULL) {
 		next = current->next;
 		pefree(current, 1);
 		current = next;
 	}
-	zend_mm_observers = NULL;
-#endif
-}
-
-/*
- * This internal function will check if there are still enabled observer on the
- * heap. In case there are, it will set the `ZEND_MM_CUSTOM_HEAP_OBSERVED` flag
- * otherwise it will unset the flag.
- */
-void zend_mm_observer_sync_flag(bool enabled_observer) {
-#if ZEND_MM_CUSTOM
-	zend_mm_heap *heap = AG(mm_heap);
-	if (heap == NULL) {
-		return;
-	}
-	if (enabled_observer) {
-		// When an observer was enabled, we don't need to find if there were
-		// enabled observers
-		heap->use_custom_heap |= ZEND_MM_CUSTOM_HEAP_OBSERVED;
-		return;
-	}
-	// An observer got disabled, so we need to check if there are still enabled
-	// observers left in the list
-	zend_mm_heap_observer *current = heap->observers;
-	while (current != NULL) {
-		if (current->enabled == true) {
-			// in case we find an enabled observer there is nothing to do
-			return;
-		}
-		current = current->next;
-	}
+	heap->observers = NULL;
 	heap->use_custom_heap &= ~ZEND_MM_CUSTOM_HEAP_OBSERVED;
+	return;
 #endif
-}
-
-zend_mm_heap_observer* zend_mm_observer_find_heap_observer(zend_mm_heap *heap, zend_mm_observer *node) {
-	if (heap == NULL) {
-		heap = AG(mm_heap);
-		if (heap == NULL) {
-			return NULL;
-		}
-	}
-	zend_mm_heap_observer *current = heap->observers;
-	while (current != NULL) {
-		if (current->observer == node) {
-			return current;
-		}
-		current = current->next;
-	}
-	return NULL;
-}
-
-ZEND_API bool zend_mm_observer_enabled(zend_mm_heap *heap, zend_mm_observer *node) {
-#if ZEND_MM_CUSTOM
-	zend_mm_heap_observer *heap_observer = zend_mm_observer_find_heap_observer(heap, node);
-	if (heap_observer == NULL) {
-		return false;
-	}
-	return heap_observer->enabled;
-#endif
-	return false;
-}
-
-ZEND_API bool zend_mm_observer_set_state(zend_mm_heap *heap, zend_mm_observer *node, bool state) {
-#if ZEND_MM_CUSTOM
-	zend_mm_heap_observer *heap_observer = zend_mm_observer_find_heap_observer(heap, node);
-	if (heap_observer == NULL) {
-		false;
-	}
-	heap_observer->enabled = state;
-	zend_mm_observer_sync_flag(state);
-	return true;
-#endif
-	return false;
-}
-
-ZEND_API bool zend_mm_observer_enable(zend_mm_heap *heap, zend_mm_observer *node) {
-#if ZEND_MM_CUSTOM
-	return zend_mm_observer_set_state(heap, node, true);
-#endif
-	return false;
-}
-
-ZEND_API bool zend_mm_observer_disable(zend_mm_heap *heap, zend_mm_observer *node) {
-#if ZEND_MM_CUSTOM
-	return zend_mm_observer_set_state(heap, node, false);
-#endif
-	return false;
 }
 
 #if ZEND_DEBUG
