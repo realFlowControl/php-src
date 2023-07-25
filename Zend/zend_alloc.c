@@ -3106,8 +3106,9 @@ ZEND_API void zend_mm_get_custom_handlers(zend_mm_heap *heap,
 
 /*
  * Use this function to register observers to the ZendMM.
- * This function operates on the thread local heap and is meant to be called in
- * RINIT. Calling it in MINIT works only in NTS builds, but not in ZTS.
+ * This function operates on the thread local heap and is meant to be called
+ * during the request lifetime. Calling it in MINIT works only in NTS builds,
+ * but not in ZTS.
  */
 ZEND_API zend_mm_observer* zend_mm_observer_register(
 	zend_mm_heap* heap,
@@ -3116,9 +3117,10 @@ ZEND_API zend_mm_observer* zend_mm_observer_register(
 	void (*realloc)(void *, size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
 ) {
 #if ZEND_MM_CUSTOM
-	if (!heap && !(heap = AG(mm_heap))) {
-		return false;
+	if (!heap) {
+		heap = AG(mm_heap);
 	}
+	ZEND_ASSERT(heap);
 
 	zend_mm_observer *node = pemalloc(sizeof(zend_mm_observer), 1);
 	node->malloc = malloc;
@@ -3153,17 +3155,17 @@ ZEND_API zend_mm_observer* zend_mm_observer_register(
 ZEND_API bool zend_mm_observer_unregister(zend_mm_heap *heap, zend_mm_observer *observer)
 {
 #if ZEND_MM_CUSTOM
-	if (!heap && !(heap = AG(mm_heap))) {
-		return false;
+	if (!heap) {
+		heap = AG(mm_heap);
 	}
+	ZEND_ASSERT(heap);
 
 	zend_mm_observer *current = heap->observers, *prev = NULL;
 
 	if (current == observer) {
 		heap->observers = observer->next;
 		pefree(observer, 1);
-		if (!heap->observers)
-		{
+		if (!heap->observers) {
 			// this was the one and only installed observer
 			heap->use_custom_heap &= ~ZEND_MM_CUSTOM_HEAP_OBSERVED;
 		}
@@ -3176,8 +3178,9 @@ ZEND_API bool zend_mm_observer_unregister(zend_mm_heap *heap, zend_mm_observer *
 	}
 
 	// did not find observer or NULL was given
-	if (current == NULL)
+	if (current == NULL) {
 		return false;
+	}
 
 	prev->next = current->next;
 	pefree(observer, 1);
@@ -3194,9 +3197,10 @@ ZEND_API bool zend_mm_observer_unregister(zend_mm_heap *heap, zend_mm_observer *
 void zend_mm_observers_shutdown(zend_mm_heap *heap)
 {
 #if ZEND_MM_CUSTOM
-	if (!heap && !(heap = AG(mm_heap))) {
-		return;
+	if (!heap) {
+		heap = AG(mm_heap);
 	}
+	ZEND_ASSERT(heap);
 	zend_mm_observer *current = heap->observers;
 	zend_mm_observer *next = NULL;
 	while (current != NULL) {
