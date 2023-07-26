@@ -23,6 +23,7 @@
 #include "ext/standard/info.h"
 #include "php_test.h"
 #include "observer.h"
+#include "zendmm_observer.h"
 #include "fiber.h"
 #include "iterators.h"
 #include "object_handlers.h"
@@ -1189,6 +1190,7 @@ PHP_MINIT_FUNCTION(zend_test)
 	}
 
 	zend_test_observer_init(INIT_FUNC_ARGS_PASSTHRU);
+	zend_test_mm_observer_minit(INIT_FUNC_ARGS_PASSTHRU);
 	zend_test_fiber_init();
 	zend_test_iterators_init();
 	zend_test_object_handlers_init();
@@ -1217,6 +1219,7 @@ PHP_RINIT_FUNCTION(zend_test)
 {
 	zend_hash_init(&ZT_G(global_weakmap), 8, NULL, ZVAL_PTR_DTOR, 0);
 	ZT_G(observer_nesting_depth) = 0;
+	zend_test_mm_observer_rinit();
 	return SUCCESS;
 }
 
@@ -1234,6 +1237,7 @@ PHP_RSHUTDOWN_FUNCTION(zend_test)
 		zend_mm_set_heap(ZT_G(zend_orig_heap));
 	}
 
+	zend_test_mm_observer_rshutdown();
 	return SUCCESS;
 }
 
