@@ -2278,11 +2278,8 @@ void zend_mm_shutdown(zend_mm_heap *heap, bool full, bool silent)
 	zend_mm_chunk *p;
 	zend_mm_huge_list *list;
 
-	if (full == false) {
-		zend_mm_observers_shutdown(heap);
-	}
-
 #if ZEND_MM_CUSTOM
+	zend_mm_observers_shutdown(heap);
 	if (heap->use_custom_heap & ~ZEND_MM_CUSTOM_HEAP_OBSERVED) {
 		if (heap->custom_heap.std._malloc == tracked_malloc) {
 			if (silent) {
@@ -3006,7 +3003,6 @@ static void alloc_globals_ctor(zend_alloc_globals *alloc_globals)
 #ifdef ZTS
 static void alloc_globals_dtor(zend_alloc_globals *alloc_globals)
 {
-	zend_mm_observers_shutdown(alloc_globals->mm_heap);
 	zend_mm_shutdown(alloc_globals->mm_heap, 1, 1);
 }
 #endif
@@ -3196,7 +3192,7 @@ ZEND_API bool zend_mm_observer_unregister(zend_mm_heap *heap, zend_mm_observer *
 
 /*
  * This function will shutdown the observers for the current heap and free
- * memory
+ * memory, it is called in `zend_mm_shutdown()`
  */
 void zend_mm_observers_shutdown(zend_mm_heap *heap)
 {
