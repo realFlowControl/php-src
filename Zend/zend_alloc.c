@@ -3162,16 +3162,7 @@ ZEND_API bool zend_mm_observer_unregister(zend_mm_heap *heap, zend_mm_observer *
 
 	zend_mm_observer *current = heap->observers, *prev = NULL;
 
-	if (current == observer) {
-		heap->observers = observer->next;
-		pefree(observer, 1);
-		if (!heap->observers) {
-			// this was the one and only installed observer
-			heap->use_custom_heap &= ~ZEND_MM_CUSTOM_HEAP_OBSERVED;
-		}
-		return true;
-	}
-
+	// find the given observer in the list of observers
 	while (current != NULL && current != observer) {
 		prev = current;
 		current = current->next;
@@ -3182,7 +3173,18 @@ ZEND_API bool zend_mm_observer_unregister(zend_mm_heap *heap, zend_mm_observer *
 		return false;
 	}
 
-	prev->next = current->next;
+	if (prev == NULL) {
+		// current observer is the first in the list
+		heap->observers = current->next;
+		if (!heap->observers) {
+			// and current was also the last in the list, so no more observers
+			// left
+			heap->use_custom_heap &= ~ZEND_MM_CUSTOM_HEAP_OBSERVED;
+		}
+	} else {
+		prev->next = current->next;
+	}
+
 	pefree(observer, 1);
 	return true;
 #else
