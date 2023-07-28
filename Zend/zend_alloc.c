@@ -3107,8 +3107,7 @@ ZEND_API void zend_mm_get_custom_handlers(zend_mm_heap *heap,
 /*
  * Use this function to register observers to the ZendMM.
  * This function operates on the thread local heap and is meant to be called
- * during the request lifetime. Calling it in MINIT works only in NTS builds,
- * but not in ZTS.
+ * during the request lifetime.
  */
 ZEND_API zend_mm_observer* zend_mm_observer_register(
 	zend_mm_heap* heap,
