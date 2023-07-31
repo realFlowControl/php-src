@@ -203,9 +203,9 @@ typedef struct  _zend_mm_huge_list zend_mm_huge_list;
 static bool zend_mm_use_huge_pages = false;
 
 struct _zend_mm_observer {
-	void (*malloc)(size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
-	void (*free)(void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
-	void (*realloc)(void *, size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+	void (*malloc)(size_t len, void *ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+	void (*free)(void *ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
+	void (*realloc)(void *old_ptr, size_t len, void *new_ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC);
 	zend_mm_observer *next;
 };
 
@@ -3098,9 +3098,9 @@ ZEND_API void zend_mm_get_custom_handlers(zend_mm_heap *heap,
  */
 ZEND_API zend_mm_observer* zend_mm_observer_register(
 	zend_mm_heap* heap,
-	void (*malloc)(size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
-	void (*free)(void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
-	void (*realloc)(void *, size_t, void * ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
+	void (*malloc)(size_t len, void *ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
+	void (*free)(void *ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
+	void (*realloc)(void *old_ptr, size_t len, void *new_ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
 ) {
 #if ZEND_MM_CUSTOM
 	if (!heap) {
