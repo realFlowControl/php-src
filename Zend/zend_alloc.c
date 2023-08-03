@@ -2420,7 +2420,7 @@ void* ZEND_FASTCALL _zend_mm_realloc2(zend_mm_heap *heap, void *ptr, size_t size
 ZEND_API size_t ZEND_FASTCALL _zend_mm_block_size(zend_mm_heap *heap, void *ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
 {
 #if ZEND_MM_CUSTOM
-	if (UNEXPECTED(heap->use_custom_heap)) {
+	if (UNEXPECTED(heap->use_custom_heap & ~ZEND_MM_CUSTOM_HEAP_OBSERVED)) {
 		if (heap->custom_heap.std._malloc == tracked_malloc) {
 			zend_ulong h = ((uintptr_t) ptr) >> ZEND_MM_ALIGNMENT_LOG2;
 			zval *size_zv = zend_hash_index_find(heap->tracked_allocs, h);
