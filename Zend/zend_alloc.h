@@ -289,8 +289,8 @@ ZEND_API zend_mm_observer* zend_mm_observer_register(
 	zend_mm_heap *heap,
 	void (*malloc)(size_t len, void *ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
 	void (*free)(void *ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
-	void (*realloc)(void *old_ptr, size_t len, void *new_ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
-
+	void (*realloc)(void *old_ptr, size_t len, void *new_ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC),
+	void (*gc)(size_t len ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
 );
 ZEND_API bool zend_mm_observer_unregister(zend_mm_heap *heap, zend_mm_observer *observer);
 void zend_mm_observers_shutdown(zend_mm_heap *heap);
